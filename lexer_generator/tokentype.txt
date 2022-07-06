@@ -1,0 +1,13 @@
+Num
+ID
+Equal, =
+Plus, + 
+Minus, -
+Mult, *
+Mod, %
+Div, /
+EOF
+LParen, (
+RParen, )
+Fn, fn
+Arrow, ->

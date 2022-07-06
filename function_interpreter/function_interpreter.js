@@ -12,7 +12,7 @@ let RParen = Symbol("RParen");
 let Fn = Symbol("Fn");
 let Arrow = Symbol("Arrow");
 
-
+ 
 class function_table{
 
     constructor(){
@@ -49,6 +49,20 @@ class function_table{
         for(let i = this.table.length - 1; i >= 0; i--){
             if(this.table[i].has(name)){
                 return this.table[i].get(name);
+            }
+        }
+        return undefined;
+    }
+
+    getNested(name, key){
+        for(let i = this.table.length - 1; i >= 0; i--){
+            if(this.table[i].has(name)){
+                let value = this.table[i].get(name);
+                if (value instanceof Map){
+                    return value.get(key);
+                } else {
+                    throw new Error("The value accessed does not support indexing")
+                }
             }
         }
         return undefined;
