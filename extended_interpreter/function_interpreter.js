@@ -11,6 +11,9 @@ let LParen = Symbol("LParen");
 let RParen = Symbol("RParen");
 let Fn = Symbol("Fn");
 let Arrow = Symbol("Arrow");
+let Semi = Symbol("Semi");
+let RBrace = Symbol("RBrace");
+let LBrace = Symbol("LBrace");
 
  
 class function_table{
@@ -30,8 +33,9 @@ class function_table{
     add_scope(scope){
         if (scope === undefined){
             this.table.push(new Map());
+        } else {
+            this.table.push(new Map(Object.entries(scope)));
         }
-        this.table.push(new Map(Object.entries(scope)));
     }
 
 
@@ -250,6 +254,18 @@ class Lexer{
                 this.advance();
                 return new Token(Equal, "=");
             }
+            if (this.current_char == ";"){
+                this.advance();
+                return new Token(Semi, ";");
+            }
+            if (this.current_char == "{"){
+                this.advance();
+                return new Token(LBrace, "{");
+            }
+            if (this.current_char == "}"){
+                this.advance();
+                return new Token(RBrace, "}");
+            }
             else {
                 this.error();
             }
@@ -267,11 +283,11 @@ class Lexer{
         }
         tokens.push(new Token(EOF, null));
 
-        if (tokens[0].value == "fn"){
-            this.analyze_function();
-        } else if ( this.input.indexOf("fn") != -1){
-          throw new Error("Functions cannot be defined in expressions")
-        }
+        // if (tokens[0].value == "fn"){
+        //     this.analyze_function();
+        // } else if ( this.input.indexOf("fn") != -1){
+        //   throw new Error("Functions cannot be defined in expressions")
+        // }
 
         console.log(tokens)
 
@@ -282,6 +298,21 @@ class Lexer{
 
 class AST{
     constructor(){  }
+}
+
+class ExprList extends AST{
+    constructor(){
+        super();
+        this.expr = [];
+    } 
+    visit(){
+        scopetable.add_scope(); 
+        let visits = this.expr.map(function(e){
+            return e.visit();
+        })
+        scopetable.remove_scope();
+        return visits[visits.length - 1];
+    }
 }
 
 
@@ -295,10 +326,11 @@ class FuncDef extends AST{
 
     visit(){
         if (scopetable.has_variable(this.name) && !(scopetable.get(this.name) instanceof FuncDef)){
-            throw new Error(`Function ${this.name} is already defined`);
+            console.log(`Function ${this.name} is already defined`);
+        } else {
+            scopetable.set(this.name, this);
+            return "Function defined";
         }
-        scopetable.set(this.name, this);
-        return "";
     }
 }
 
@@ -339,7 +371,6 @@ class Assign extends AST{
     }
 
     visit(){
-        //console.log(this.op.type);
         if (this.op.type == Equal  && this.left instanceof Var ){
             let new_value = this.right.visit();
             scopetable.set(this.left.name, new_value);
@@ -438,6 +469,7 @@ class Parser {
 
     eat(expected_type){
         if (this.current_token.type == expected_type){
+            //console.log(`Eating token ${this.current_token.value}`);
             this.pos += 1;
             this.current_token = this.token_list[this.pos];
         }
@@ -445,6 +477,29 @@ class Parser {
             this.error(expected_type);
         }
     }
+
+    peek_token(){
+        return this.token_list[this.pos + 1];
+    }
+
+    expr_list(){
+        let expr_list = new ExprList();
+        this.eat(LBrace);
+        while(this.current_token.type != EOF && this.current_token.type != RBrace){
+            if (this.current_token.type == LBrace){
+                expr_list.expr.push(this.expr_list());
+            }
+            expr_list.expr.push(this.expr());
+            if (this.current_token.type == RBrace){
+                
+            } else if (this.current_token.type == Semi){
+                this.eat(Semi);
+            }
+        }
+        this.eat(RBrace)
+        return expr_list;
+    }
+    
 
     expr(){
         let node = this.plus_minus();
@@ -514,8 +569,12 @@ class Parser {
             this.eat(RParen);
             return node;
         }
+        if (token.type == LBrace){
+            return this.expr_list();
+        }
         if (token.type == ID){
             let is_function = scopetable.check_if_function(token.value);
+            console.log(is_function);
 
             if (is_function){
                 let args_length = scopetable.get(token.value).args.length;
@@ -549,6 +608,7 @@ class Parser {
                 this.eat(Arrow);
                 let body = this.expr();
                 let f = new FuncDef(name, args, body);
+                f.visit();
                 return f;
             } else {
                 console.log("Error in function definition");
@@ -559,7 +619,7 @@ class Parser {
     }
 
     parse(){
-        let node = this.expr();
+        let node = this.expr_list();
         if (this.current_token.type != EOF){
             throw new Error("Error, no EOF found");
         }
@@ -597,6 +657,7 @@ class Interpreter{
         let tree = parser.parse();
         let solver = new Solver(tree);
         let result = solver.visit();
+        scopetable.print()
         return result;
     }
 }
@@ -604,7 +665,13 @@ class Interpreter{
 let interpreter = new Interpreter();
 
 console.log(interpreter.input(`
-x = b = 89
+{ 
+    fn avg a b => (a + b) / 2;
+    x = 1;
+    y = 4;
+    z = avg x y;
+    z;
+}
 `));
 
 module.exports = {
