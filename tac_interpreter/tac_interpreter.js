@@ -25,6 +25,16 @@ let And = Symbol("And");
 let Or = Symbol("Or");
 let Eq = Symbol("Eq");
 
+let If = Symbol("If");
+let Else = Symbol("Else");
+
+const keywords_obj = {
+    "if": If,
+    "else": Else,
+}
+
+const keywords = new Map(Object.entries(keywords_obj));
+
 function tempGenerator() {
     let variable_idx = 0;
     return function() {
@@ -279,7 +289,11 @@ class Lexer{
             }
 
             if (this.current_char.match(/[a-zA-Z_]/)){
-                return new Token(ID, this.identifier());
+                let result = this.identifier();
+                if (keywords.has(result)){
+                    return new Token(keywords.get(result), result);
+                }
+                return new Token(ID, result);
             }
             if (this.current_char == "("){
                 this.advance();
@@ -395,6 +409,26 @@ class ExprList extends AST{
             console.log("STATEMENT: ", e)
             e.tac(instruction_list);
         })
+    }
+}
+
+class IfStatement extends AST{
+    constructor(condition, then_block, else_block){
+        super();
+        this.condition = condition;
+        this.then_block = then_block;
+        this.else_block = else_block;
+    }
+    visit(){
+        let condition = this.condition.visit();
+
+        let ret = null;
+        if (condition){
+            ret = this.then_block.visit();
+        } else {
+            ret = this.else_block.visit();
+        }
+        return ret;
     }
 }
 
@@ -633,9 +667,12 @@ class Parser {
         while(this.current_token.type != EOF && this.current_token.type != RBrace){
             if (this.current_token.type == LBrace){
                 expr_list.expr.push(this.expr_list());
-            } else {
-                expr_list.expr.push(this.expr());
+            } else if (this.current_token.type == If){
+                expr_list.expr.push(this.if_statement());
             }
+            else {
+                expr_list.expr.push(this.expr());
+            } 
             if (this.current_token.type == Semi){
                 this.eat(Semi);
             }
@@ -647,6 +684,20 @@ class Parser {
         this.eat(RBrace)
         console.log(expr_list.expr);
         return expr_list;
+    }
+
+    if_statement(){
+        this.eat(If);
+        this.eat(LParen);
+        let condition = this.expr();
+        this.eat(RParen);
+        let then_block = this.expr_list();
+        let else_block = null;
+        if (this.current_token.type == Else){
+            this.eat(Else);
+            else_block = this.expr_list();
+        }
+        return new IfStatement(condition, then_block, else_block);
     }
  
 
@@ -835,7 +886,7 @@ class Interpreter{
         scopetable.clear();
     }
 
-    input(expression="", tac=false){
+    input(expression="", tac=false, lex_only=false){
 
         if (!expression || expression === "" || expression.trim() === ""){
           return "";
@@ -844,6 +895,9 @@ class Interpreter{
         let instruction_list = new InstructionList();
         let lexer = new Lexer(expression);
         let parser = new Parser(lexer.tokenize());
+        if (lex_only){
+            return parser.token_list;
+        }
         let tree = parser.parse();
         console.log("TREE: ", tree)
         let solver = new Solver(tree, instruction_list);
@@ -861,9 +915,12 @@ let interpreter = new Interpreter();
 
 console.log(interpreter.input(`
 { 
-    q = (5 && 5) + 1;
+    a = {
+        b = 1;
+    };
+    a;
 }
-`, true));
+`, false));
 
 
 module.exports = {
