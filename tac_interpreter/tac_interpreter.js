@@ -38,7 +38,14 @@ const keywords = new Map(Object.entries(keywords_obj));
 function tempGenerator() {
     let variable_idx = 0;
     return function() {
-        return "#t" + variable_idx++;
+        return "_t" + variable_idx++;
+    }
+}
+
+function labelGenerator() {
+    let label_idx = 0;
+    return function() {
+        return "_L" + label_idx++ + ":";
     }
 }
 
@@ -47,6 +54,7 @@ class InstructionList{
     constructor(){
         this.instructions = [];
         this.tempGenerator = tempGenerator();
+        this.labelGenerator = labelGenerator();
     }
     toString(){
         return this.instructions.join("\n");
@@ -56,6 +64,9 @@ class InstructionList{
     }
     get_temp(){
         return this.tempGenerator();
+    }
+    get_label(){
+        return this.labelGenerator();
     }
 }
 
@@ -410,10 +421,13 @@ class ExprList extends AST{
     }
 
     tac(instruction_list){
-        this.expr.forEach(function(e){
-            console.log("STATEMENT: ", e)
+
+        for (let i = 0; i < this.expr.length - 1; i++){
+            let e = this.expr[i];
             e.tac(instruction_list);
-        })
+        }
+
+        return this.expr[this.expr.length -1].tac(instruction_list);
     }
 }
 
@@ -434,6 +448,21 @@ class IfStatement extends AST{
             ret = this.else_block.visit();
         }
         return ret;
+    }
+
+    // Add tac instructions to the instruction list
+    tac(instruction_list){
+        let tmp_condition = this.condition.tac(instruction_list);
+        let label0 = instruction_list.get_label();
+        let label1 = instruction_list.get_label();
+        instruction_list.add_instruction(`IfZ ${tmp_condition} Goto ${label0}`);
+        this.then_block.tac(instruction_list);
+        instruction_list.add_instruction(`Goto ${label1}`);
+        instruction_list.add_instruction(`${label0}`);
+        if (this.else_block){
+            this.else_block.tac(instruction_list);
+        }
+        instruction_list.add_instruction(`${label1}`);
     }
 }
 
@@ -920,18 +949,18 @@ let interpreter = new Interpreter();
 
 console.log(interpreter.input(`
 { 
-    b = 42;
+    b = 42 + 4;
     c = 420;
     a = {
         c = b;
-        b = 5;
+        b = 5 + c;
     };
     if (a == 6){
         b = c;
     };
     b;
 }
-`, false));
+`, true));
 
 
 module.exports = {
