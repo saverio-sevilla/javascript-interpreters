@@ -15,7 +15,30 @@ let Semi = Symbol("Semi");
 let RBrace = Symbol("RBrace");
 let LBrace = Symbol("LBrace");
 
- 
+function tempGenerator() {
+    let variable_idx = 0;
+    return function() {
+        return "_t" + variable_idx++;
+    }
+}
+
+
+class InstructionList{
+    constructor(){
+        this.instructions = [];
+        this.tempGenerator = tempGenerator();
+    }
+    toString(){
+        return this.instructions.join("\n");
+    }
+    add_instruction(str){
+        this.instructions.push(str);
+    }
+    get_temp(){
+        return this.tempGenerator();
+    }
+}
+
 class function_table{
 
     constructor(){
@@ -313,6 +336,13 @@ class ExprList extends AST{
         scopetable.remove_scope();
         return visits[visits.length - 1];
     }
+
+    tac(instruction_list){
+        this.expr.forEach(function(e){
+            console.log("STATEMENT: ", e)
+            e.tac(instruction_list);
+        })
+    }
 }
 
 
@@ -379,6 +409,17 @@ class Assign extends AST{
             throw new Error(`Attempted to build a comparison node with an invalid operator or operand`);
         }    
     }
+
+    tac(instruction_list){
+        console.log("ALIVE: ", instruction_list);
+        if (this.op.type == Equal && this.left instanceof Var){
+            const right = this.right.tac(instruction_list);
+            instruction_list.add_instruction(`${this.left.name} = ${right}`);
+            return this.left.name;
+        } else {
+            throw new Error(`Attempted to build a tac instruction with an invalid operator or operand`);
+        }
+    }
 }
 
 class BinOp extends AST{
@@ -406,6 +447,16 @@ class BinOp extends AST{
             return this.left.visit() % this.right.visit();
         }
     }
+
+    tac(instruction_list){
+        const left = this.left.tac(instruction_list);
+        const right = this.right.tac(instruction_list);
+        console.log("UNDEFINED?", instruction_list);
+        const temp = instruction_list.get_temp();
+        instruction_list.add_instruction(`${temp} = ${left} ${this.op.value} ${right}`);
+        return temp;
+    }
+
 }
 
 class UnaryOp extends AST{
@@ -423,6 +474,14 @@ class UnaryOp extends AST{
             return -this.expr.visit();
         }
     }
+
+    tac(instruction_list){
+        const expr = this.expr.tac(instruction_list);
+        const temp = instruction_list.get_temp();
+        instruction_list.add_instruction(`${temp} = ${this.op.value} ${expr}`);
+        return temp;
+    }
+
 }
 
 class Num extends AST{
@@ -434,6 +493,10 @@ class Num extends AST{
 
     visit(){
         return Number(this.value);
+    }
+
+    tac(instruction_list){
+        return this.visit();
     }
 }
 
@@ -450,6 +513,10 @@ class Var extends AST{
         } else {
             throw new Error(`Variable ${this.name} is not defined`);
         }
+    }
+
+    tac(instruction_list){
+        return this.name;
     }
 }
 
@@ -488,15 +555,19 @@ class Parser {
         while(this.current_token.type != EOF && this.current_token.type != RBrace){
             if (this.current_token.type == LBrace){
                 expr_list.expr.push(this.expr_list());
+            } else {
+                expr_list.expr.push(this.expr());
             }
-            expr_list.expr.push(this.expr());
-            if (this.current_token.type == RBrace){
-                
-            } else if (this.current_token.type == Semi){
+            if (this.current_token.type == Semi){
                 this.eat(Semi);
+            }
+            
+            else if (this.current_token.type != RBrace) {
+                throw new Error("Found an unterminated statement: semicolon or right braces expected")
             }
         }
         this.eat(RBrace)
+        console.log(expr_list.expr);
         return expr_list;
     }
     
@@ -629,13 +700,19 @@ class Parser {
 }
 
 class Solver{
-    constructor(tree){
+    constructor(tree, instruction_list){
         this.tree = tree;
+        this.instruction_list = instruction_list
     }
 
     visit(){
         let visit = this.tree.visit();
         return visit;
+    }
+
+    tac(){
+        let tac = this.tree.tac(this.instruction_list);
+        return this.instruction_list;
     }
 }
 
@@ -645,19 +722,24 @@ class Interpreter{
         scopetable.clear();
     }
 
-    input(expression=""){
+    input(expression="", tac=false){
 
         if (!expression || expression === "" || expression.trim() === ""){
           return "";
         }
 
-
+        let instruction_list = new InstructionList();
         let lexer = new Lexer(expression);
         let parser = new Parser(lexer.tokenize());
         let tree = parser.parse();
-        let solver = new Solver(tree);
+        console.log("TREE: ", tree)
+        let solver = new Solver(tree, instruction_list);
         let result = solver.visit();
-        scopetable.print()
+        if (tac){
+            let tac = solver.tac();
+            console.log(tac.toString());
+        }
+
         return result;
     }
 }
@@ -666,13 +748,15 @@ let interpreter = new Interpreter();
 
 console.log(interpreter.input(`
 { 
-    fn avg a b => (a + b) / 2;
-    x = 1;
-    y = 4;
-    z = avg x y;
-    z;
+    a = 1;
+    b = 1;
+    c = 42;
+    d = 420;
+    a = b + c + d;
+    b = a * a + b * b;
 }
-`));
+`, true));
+
 
 module.exports = {
     Interpreter: Interpreter
