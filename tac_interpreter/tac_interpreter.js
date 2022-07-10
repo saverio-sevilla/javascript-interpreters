@@ -15,7 +15,7 @@ let Semi = Symbol("Semi");
 let RBrace = Symbol("RBrace");
 let LBrace = Symbol("LBrace");
 
-let Lt = Symbol("Lt"); //Add all these
+let Lt = Symbol("Lt");
 let Gt = Symbol("Gt");
 let LtEq = Symbol("LtEq");
 let GtEq = Symbol("GtEq");
@@ -28,7 +28,7 @@ let Eq = Symbol("Eq");
 function tempGenerator() {
     let variable_idx = 0;
     return function() {
-        return "_t" + variable_idx++;
+        return "#t" + variable_idx++;
     }
 }
 
@@ -49,7 +49,7 @@ class InstructionList{
     }
 }
 
-class function_table{
+class FunctionTable{
 
     constructor(){
         this.table = [new Map()];
@@ -132,7 +132,7 @@ class function_table{
 }
 
 
-let scopetable = new function_table();
+let scopetable = new FunctionTable();
 
 
 class Token{
@@ -250,32 +250,32 @@ class Lexer{
             if (this.current_char == "=" && this.peek() == "="){
                 this.advance();
                 this.advance();
-                return new Token(Eq, "==");
+                return new Token(Eq, "eq");
             }
             if (this.current_char == "!" && this.peek() == "="){
                 this.advance();
                 this.advance();
-                return new Token(NotEq, "!=");
+                return new Token(NotEq, "ne");
             }
             if (this.current_char == ">" && this.peek() == "="){
                 this.advance();
                 this.advance();
-                return new Token(GtEq, ">=");
+                return new Token(GtEq, "gteq");
             }
             if (this.current_char == "<" && this.peek() == "="){
                 this.advance();
                 this.advance();
-                return new Token(LtEq, "<=");
+                return new Token(LtEq, "lteq");
             }
             if (this.current_char == "&" && this.peek() == "&"){
                 this.advance();
                 this.advance();
-                return new Token(And, "and");
+                return new Token(And, "&&");
             }
             if (this.current_char == "|" && this.peek() == "|"){
                 this.advance();
                 this.advance();
-                return new Token(Or, "or");
+                return new Token(Or, "||");
             }
 
             if (this.current_char.match(/[a-zA-Z_]/)){
@@ -332,11 +332,11 @@ class Lexer{
             }
             if (this.current_char == "<"){
                 this.advance();
-                return new Token(Lt, "<");
+                return new Token(Lt, "lt");
             }
             if (this.current_char == ">"){
                 this.advance();
-                return new Token(Gt, ">");
+                return new Token(Gt, "gt");
             }
             if (this.current_char == "!"){
                 this.advance();
@@ -464,7 +464,6 @@ class Assign extends AST{
     }
 
     tac(instruction_list){
-        console.log("ALIVE: ", instruction_list);
         if (this.op.type == Equal && this.left instanceof Var){
             const right = this.right.tac(instruction_list);
             instruction_list.add_instruction(`${this.left.name} = ${right}`);
@@ -499,12 +498,35 @@ class BinOp extends AST{
         else if (this.op.type == Mod){
             return this.left.visit() % this.right.visit();
         }
+        else if (this.op.type == Eq){
+            return this.left.visit() == this.right.visit();
+        }
+        else if (this.op.type == NotEq){
+            return this.left.visit() != this.right.visit();
+        } 
+        else if (this.op.type == Lt){
+            return this.left.visit() < this.right.visit();
+        }
+        else if (this.op.type == Gt){
+            return this.left.visit() > this.right.visit();
+        }
+        else if (this.op.type == LtEq){
+            return this.left.visit() <= this.right.visit();
+        }
+        else if (this.op.type == GtEq){
+            return this.left.visit() >= this.right.visit();
+        } 
+        else if (this.op.type == And){
+            return Boolean(this.left.visit() && this.right.visit());
+        } 
+        else if (this.op.type == Or){
+            return Boolean(this.left.visit() || this.right.visit());
+        }
     }
 
     tac(instruction_list){
         const left = this.left.tac(instruction_list);
         const right = this.right.tac(instruction_list);
-        console.log("UNDEFINED?", instruction_list);
         const temp = instruction_list.get_temp();
         instruction_list.add_instruction(`${temp} = ${left} ${this.op.value} ${right}`);
         return temp;
@@ -525,6 +547,9 @@ class UnaryOp extends AST{
         } 
         else if (this.op.type == Minus){
             return -this.expr.visit();
+        }
+        else if (this.op.type == Not){
+            return !this.expr.visit();
         }
     }
 
@@ -626,12 +651,46 @@ class Parser {
  
 
     expr(){
-        let node = this.plus_minus();
+        let node = this.logical();
 
         while (this.current_token.type == Equal){
             let op = this.current_token;
             this.eat(Equal);
             node = new Assign(node, op, this.expr());
+        }
+
+        return node;
+    }
+
+    logical(){
+        let node = this.comparison();
+
+        while (this.current_token.type == And || this.current_token.type == Or){
+            let op = this.current_token;
+            this.eat(op.type);
+            node = new BinOp(node, op, this.comparison());
+        }
+
+        return node;
+    }
+
+    comparison(){
+        let node = this.equality();
+        while (this.current_token.type == Lt || this.current_token.type == Gt || this.current_token.type == LtEq || this.current_token.type == GtEq){
+            let op = this.current_token;
+            this.eat(op.type);
+            node = new BinOp(node, op, this.equality());
+        }
+        return node;
+    }
+
+    equality(){
+        let node = this.plus_minus();
+
+        while (this.current_token.type == Eq|| this.current_token.type == NotEq){
+            let op = this.current_token;
+            this.eat(op.type);
+            node = new BinOp(node, op, this.plus_minus());
         }
         return node;
     }
@@ -802,12 +861,7 @@ let interpreter = new Interpreter();
 
 console.log(interpreter.input(`
 { 
-    a = 1;
-    b = 1;
-    c = 42;
-    d = 420;
-    a = b + c + d;
-    b = a * a + b * b;
+    q = (5 && 5) + 1;
 }
 `, true));
 
