@@ -15,6 +15,16 @@ let Semi = Symbol("Semi");
 let RBrace = Symbol("RBrace");
 let LBrace = Symbol("LBrace");
 
+let Lt = Symbol("Lt"); //Add all these
+let Gt = Symbol("Gt");
+let LtEq = Symbol("LtEq");
+let GtEq = Symbol("GtEq");
+let NotEq = Symbol("NotEq");
+let Not = Symbol("Not");
+let And = Symbol("And");    
+let Or = Symbol("Or");
+let Eq = Symbol("Eq");
+
 function tempGenerator() {
     let variable_idx = 0;
     return function() {
@@ -237,6 +247,37 @@ class Lexer{
                 this.advance();
                 return new Token(Fn, "fn");
             }
+            if (this.current_char == "=" && this.peek() == "="){
+                this.advance();
+                this.advance();
+                return new Token(Eq, "==");
+            }
+            if (this.current_char == "!" && this.peek() == "="){
+                this.advance();
+                this.advance();
+                return new Token(NotEq, "!=");
+            }
+            if (this.current_char == ">" && this.peek() == "="){
+                this.advance();
+                this.advance();
+                return new Token(GtEq, ">=");
+            }
+            if (this.current_char == "<" && this.peek() == "="){
+                this.advance();
+                this.advance();
+                return new Token(LtEq, "<=");
+            }
+            if (this.current_char == "&" && this.peek() == "&"){
+                this.advance();
+                this.advance();
+                return new Token(And, "and");
+            }
+            if (this.current_char == "|" && this.peek() == "|"){
+                this.advance();
+                this.advance();
+                return new Token(Or, "or");
+            }
+
             if (this.current_char.match(/[a-zA-Z_]/)){
                 return new Token(ID, this.identifier());
             }
@@ -288,6 +329,18 @@ class Lexer{
             if (this.current_char == "}"){
                 this.advance();
                 return new Token(RBrace, "}");
+            }
+            if (this.current_char == "<"){
+                this.advance();
+                return new Token(Lt, "<");
+            }
+            if (this.current_char == ">"){
+                this.advance();
+                return new Token(Gt, ">");
+            }
+            if (this.current_char == "!"){
+                this.advance();
+                return new Token(Not, "!");
             }
             else {
                 this.error();
@@ -570,7 +623,7 @@ class Parser {
         console.log(expr_list.expr);
         return expr_list;
     }
-    
+ 
 
     expr(){
         let node = this.plus_minus();
@@ -582,6 +635,7 @@ class Parser {
         }
         return node;
     }
+
 
     plus_minus(){
         let node = this.mul_div();
