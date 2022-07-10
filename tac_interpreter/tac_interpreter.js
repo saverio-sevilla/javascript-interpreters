@@ -391,16 +391,21 @@ class AST{
 }
 
 class ExprList extends AST{
-    constructor(){
+    constructor(scoped=true){
         super();
         this.expr = [];
+        this.scoped = scoped;
     } 
     visit(){
-        scopetable.add_scope(); 
+        if (this.scoped){
+            scopetable.add_scope(); 
+        }
         let visits = this.expr.map(function(e){
             return e.visit();
         })
-        scopetable.remove_scope();
+        if(this.scoped){
+            scopetable.remove_scope();
+        }
         return visits[visits.length - 1];
     }
 
@@ -425,7 +430,7 @@ class IfStatement extends AST{
         let ret = null;
         if (condition){
             ret = this.then_block.visit();
-        } else {
+        } else if (this.else_block){
             ret = this.else_block.visit();
         }
         return ret;
@@ -661,8 +666,8 @@ class Parser {
         return this.token_list[this.pos + 1];
     }
 
-    expr_list(){
-        let expr_list = new ExprList();
+    expr_list(scoped=true){
+        let expr_list = new ExprList(scoped);
         this.eat(LBrace);
         while(this.current_token.type != EOF && this.current_token.type != RBrace){
             if (this.current_token.type == LBrace){
@@ -691,11 +696,11 @@ class Parser {
         this.eat(LParen);
         let condition = this.expr();
         this.eat(RParen);
-        let then_block = this.expr_list();
+        let then_block = this.expr_list(false);
         let else_block = null;
         if (this.current_token.type == Else){
             this.eat(Else);
-            else_block = this.expr_list();
+            else_block = this.expr_list(false);
         }
         return new IfStatement(condition, then_block, else_block);
     }
@@ -915,10 +920,16 @@ let interpreter = new Interpreter();
 
 console.log(interpreter.input(`
 { 
+    b = 42;
+    c = 420;
     a = {
-        b = 1;
+        c = b;
+        b = 5;
     };
-    a;
+    if (a == 6){
+        b = c;
+    };
+    b;
 }
 `, false));
 
