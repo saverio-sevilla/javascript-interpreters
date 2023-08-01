@@ -14,6 +14,27 @@ let Arrow = Symbol("Arrow");
 let Semi = Symbol("Semi");
 let RBrace = Symbol("RBrace");
 let LBrace = Symbol("LBrace");
+let Lt = Symbol("Lt");
+let Gt = Symbol("Gt");
+let LtEq = Symbol("LtEq");
+let GtEq = Symbol("GtEq");
+let NotEq = Symbol("NotEq");
+let Not = Symbol("Not");
+let And = Symbol("And");    
+let Or = Symbol("Or");
+let Eq = Symbol("Eq");
+let If = Symbol("If");
+let Else = Symbol("Else");
+let While = Symbol("While");
+
+const keywords_obj = {
+    "if": If,
+    "else": Else,
+    //Add while 
+    "while": While,
+}
+
+const keywords = new Map(Object.entries(keywords_obj));
 
 function tempGenerator() {
     let variable_idx = 0;
@@ -22,21 +43,85 @@ function tempGenerator() {
     }
 }
 
-class FunctionTable{
+function labelGenerator() {
+    let label_idx = 0;
+    return function() {
+        return "_L" + label_idx++ + ":";
+    }
+}
+
+const Assignment = Symbol("Assignment");
+
+class Instruction{
+    constructor(type){
+        this.type = type;
+    }
+}
+
+class AssignmentInstruction extends Instruction{
+    constructor(left, level, right){
+        super(Assignment);
+        this.left = left;
+        this.level = level;
+        this.right = right;
+    }
+
+    toString(){
+        return `${this.left}(${this.level}) = ${this.right}`;
+    }
+}
+
+
+class InstructionList{
+    constructor(){
+        this.instructions = [];
+        this.tempGenerator = tempGenerator();
+        this.labelGenerator = labelGenerator();
+    }
+    toString(){
+        //Return the instructions in the instruction list, don't go to a new line for the labels 
+        return this.instructions.join("\n");
+
+    }
+    addInstruction(str){
+        this.instructions.push(str);
+    }
+    //Write a function that returns the name and level of the previous assignment of a variable with a level lower than the current level
+    getPreviousAssignment(name, level){
+        for (let i = this.instructions.length - 1; i >= 0; i--){
+            let instruction = this.instructions[i];
+            if (instruction.type == Assignment){
+                if (instruction.left == name && instruction.level < level){
+                    return instruction;
+                }
+            }
+        }
+        return null;
+    }
+
+    getTemp(){
+        return this.tempGenerator();
+    }
+    getLabel(){
+        return this.labelGenerator();
+    }
+}
+
+class SymbolTable{
 
     constructor(){
         this.table = [new Map()];
     }
 
     print(){
-        console.log("SCOPETABLE: ")
+        console.log("Scope table: ")
         for(let i = this.table.length - 1; i >= 0; i--){
             console.log(this.table[i]);
         }
     }
 
 
-    add_scope(scope){
+    addScope(scope){
         if (scope === undefined){
             this.table.push(new Map());
         } else {
@@ -45,7 +130,7 @@ class FunctionTable{
     }
 
 
-    remove_scope(){
+    removeScope(){
         this.table.pop();
     }
 
@@ -78,8 +163,21 @@ class FunctionTable{
         return undefined;
     }
 
+    getDepth(){
+        return this.table.length - 1;
+    }
 
-    has_variable(name){
+    getNameDepth(name){
+        for(let i = this.table.length - 1; i >= 0; i--){
+            if(this.table[i].has(name)){
+                return i - 1;
+            }
+        }
+        return undefined;
+    }
+
+
+    hasVariable(name){
         for(let i = this.table.length - 1; i >= 0; i--){
             if(this.table[i].has(name)){
                 return true;
@@ -88,8 +186,8 @@ class FunctionTable{
         return false;
     }
 
-    check_if_function(name){
-        if (this.has_variable(name)){
+    isFunction(name){
+        if (this.hasVariable(name)){
             let value = this.get(name);
             if (value instanceof FuncDef){
                 return true
@@ -105,7 +203,7 @@ class FunctionTable{
 }
 
 
-let scopetable = new FunctionTable();
+let symboltable = new SymbolTable();
 
 
 class Token{
@@ -122,7 +220,7 @@ class Lexer{
         this.current_char = this.input[this.pos];
     }
 
-    analyze_function(){
+    analyzeFunction(){
 
         function eqSet(as, bs) {
             if (as.size !== bs.size) return false;
@@ -140,7 +238,7 @@ class Lexer{
             throw new Error("Duplicate args in function")
         }
         let set_second = new Set(second);
-        console.log(set_first, set_second, eqSet(set_first, set_second));
+        console.log("Function log: " , set_first, set_second, eqSet(set_first, set_second));
         if (!eqSet(set_first, set_second)){
             throw new Error("Function parameter error");
         }
@@ -151,7 +249,7 @@ class Lexer{
         throw new Error(`Lexer error at position ${this.pos}, token = ${this.current_char}`);
     }
 
-    skip_whitespace(){
+    skipSpaces(){ // FIX
         while(this.current_char && this.current_char.match(/\s/) || this.current_char && this.current_char === "\n"){
             this.advance();
         }
@@ -206,10 +304,10 @@ class Lexer{
         return this.current_char && this.current_char.match(/\s/);
     }
 
-    get_next_token(){
+    getNextToken(){
         while(this.current_char){
             if (this.current_char.match(/\s/) || this.current_char === "\n"){
-                this.skip_whitespace();
+                this.skipSpaces();
                 continue;
             }
             if (this.current_char.match(/[0-9]/)){
@@ -220,8 +318,43 @@ class Lexer{
                 this.advance();
                 return new Token(Fn, "fn");
             }
+            if (this.current_char == "=" && this.peek() == "="){
+                this.advance();
+                this.advance();
+                return new Token(Eq, "eq");
+            }
+            if (this.current_char == "!" && this.peek() == "="){
+                this.advance();
+                this.advance();
+                return new Token(NotEq, "ne");
+            }
+            if (this.current_char == ">" && this.peek() == "="){
+                this.advance();
+                this.advance();
+                return new Token(GtEq, "gteq");
+            }
+            if (this.current_char == "<" && this.peek() == "="){
+                this.advance();
+                this.advance();
+                return new Token(LtEq, "lteq");
+            }
+            if (this.current_char == "&" && this.peek() == "&"){
+                this.advance();
+                this.advance();
+                return new Token(And, "&&");
+            }
+            if (this.current_char == "|" && this.peek() == "|"){
+                this.advance();
+                this.advance();
+                return new Token(Or, "||");
+            }
+
             if (this.current_char.match(/[a-zA-Z_]/)){
-                return new Token(ID, this.identifier());
+                let result = this.identifier();
+                if (keywords.has(result)){
+                    return new Token(keywords.get(result), result);
+                }
+                return new Token(ID, result);
             }
             if (this.current_char == "("){
                 this.advance();
@@ -272,6 +405,18 @@ class Lexer{
                 this.advance();
                 return new Token(RBrace, "}");
             }
+            if (this.current_char == "<"){
+                this.advance();
+                return new Token(Lt, "lt");
+            }
+            if (this.current_char == ">"){
+                this.advance();
+                return new Token(Gt, "gt");
+            }
+            if (this.current_char == "!"){
+                this.advance();
+                return new Token(Not, "!");
+            }
             else {
                 this.error();
             }
@@ -282,7 +427,7 @@ class Lexer{
 
         let tokens = [];
         while(this.pos < this.input.length){
-            let token = this.get_next_token();
+            let token = this.getNextToken();
             if (token){
                 tokens.push(token);
             }
@@ -307,17 +452,105 @@ class AST{
 }
 
 class ExprList extends AST{
-    constructor(){
+    constructor(scoped=true){
         super();
         this.expr = [];
+        this.scoped = scoped;
     } 
     visit(){
-        scopetable.add_scope(); 
+        if (this.scoped){
+            symboltable.addScope(); 
+        }
         let visits = this.expr.map(function(e){
             return e.visit();
         })
-        scopetable.remove_scope();
+        if(this.scoped){
+            symboltable.removeScope();
+        }
         return visits[visits.length - 1];
+    }
+
+    tac(instruction_list){
+
+        if (this.scoped){
+            symboltable.addScope(); 
+        }
+
+
+        for (let i = 0; i < this.expr.length - 1; i++){
+            let e = this.expr[i];
+            e.tac(instruction_list);
+        }
+
+        let ret_val = this.expr[this.expr.length - 1].tac(instruction_list);
+
+        if(this.scoped){
+            symboltable.removeScope();
+        }
+
+        return ret_val;
+    }
+}
+
+class WhileStatement extends AST{
+    constructor(condition, block){
+        super();
+        this.condition = condition;
+        this.block = block;
+    }
+    visit(){
+        let ret = null;
+        while(this.condition.visit()){
+            ret = this.block.visit();
+        }
+
+        return ret;
+    }
+
+    tac(instruction_list){
+        let label0 = instruction_list.getLabel();
+        let label1 = instruction_list.getLabel();
+        instruction_list.addInstruction(`${label0}`);
+        let tmp_condition = this.condition.tac(instruction_list);
+        instruction_list.addInstruction(`IfZ ${tmp_condition} Goto ${label1}`);
+        this.block.tac(instruction_list);
+        instruction_list.addInstruction(`Goto ${label0}`);
+        instruction_list.addInstruction(`${label1}`);
+    }
+}
+
+class IfStatement extends AST{
+    constructor(condition, then_block, else_block){
+        super();
+        this.condition = condition;
+        this.then_block = then_block;
+        this.else_block = else_block;
+    }
+    visit(){
+        let condition = this.condition.visit();
+
+        let ret = null;
+        if (condition){
+            ret = this.then_block.visit();
+        } else if (this.else_block){
+            ret = this.else_block.visit();
+        }
+        return ret;
+    }
+
+    // Add tac instructions to the instruction list
+    tac(instruction_list){
+        let tmp_condition = this.condition.tac(instruction_list);
+        let label0 = instruction_list.getLabel();
+        let label1 = instruction_list.getLabel();
+        instruction_list.addInstruction(`IfZ ${tmp_condition} Goto ${label0}`);
+        this.then_block.tac(instruction_list);
+        instruction_list.addInstruction(`Goto ${label1}`);
+        instruction_list.addInstruction(`${label0}`);
+        if (this.else_block){
+            this.else_block.tac(instruction_list);
+        }
+        instruction_list.addInstruction(`${label1}`);
     }
 }
 
@@ -331,10 +564,10 @@ class FuncDef extends AST{
     }
 
     visit(){
-        if (scopetable.has_variable(this.name) && !(scopetable.get(this.name) instanceof FuncDef)){
+        if (symboltable.hasVariable(this.name) && !(symboltable.get(this.name) instanceof FuncDef)){
             console.log(`Function ${this.name} is already defined`);
         } else {
-            scopetable.set(this.name, this);
+            symboltable.set(this.name, this);
             return "Function defined";
         }
     }
@@ -348,7 +581,7 @@ class FuncCall extends AST{
     }
 
     visit(){
-        let func = scopetable.get(this.name);
+        let func = symboltable.get(this.name);
         if (func){
             let arg_values = this.args.map(arg => arg.visit());
             let arg_names = func.args;
@@ -357,15 +590,17 @@ class FuncCall extends AST{
                 arg_table[arg_names[i]] = arg_values[i];
             }
 
-            scopetable.add_scope(arg_table);
+            symboltable.addScope(arg_table);
             let result = func.body.visit();
-            scopetable.remove_scope();
+            symboltable.removeScope();
             return result;
         } else {
             throw new Error(`Function ${this.name} is not defined`);
         }
 
     }
+
+    //Make a tak function for this class
 }
 
 class Assign extends AST{
@@ -379,11 +614,22 @@ class Assign extends AST{
     visit(){
         if (this.op.type == Equal  && this.left instanceof Var ){
             let new_value = this.right.visit();
-            scopetable.set(this.left.name, new_value);
+            symboltable.set(this.left.name, new_value);
             return new_value;
         } else {
             throw new Error(`Attempted to build a comparison node with an invalid operator or operand`);
         }    
+    }
+
+    tac(instruction_list){
+        if (this.op.type == Equal && this.left instanceof Var){
+            const right = this.right.tac(instruction_list);
+            const assignment_instruction = new AssignmentInstruction(this.left.name, symboltable.getDepth(), right)
+            instruction_list.addInstruction(assignment_instruction);
+            return this.left.name;
+        } else {
+            throw new Error(`Attempted to build a tac instruction with an invalid operator or operand`);
+        }
     }
 }
 
@@ -411,7 +657,40 @@ class BinOp extends AST{
         else if (this.op.type == Mod){
             return this.left.visit() % this.right.visit();
         }
+        else if (this.op.type == Eq){
+            return this.left.visit() == this.right.visit();
+        }
+        else if (this.op.type == NotEq){
+            return this.left.visit() != this.right.visit();
+        } 
+        else if (this.op.type == Lt){
+            return this.left.visit() < this.right.visit();
+        }
+        else if (this.op.type == Gt){
+            return this.left.visit() > this.right.visit();
+        }
+        else if (this.op.type == LtEq){
+            return this.left.visit() <= this.right.visit();
+        }
+        else if (this.op.type == GtEq){
+            return this.left.visit() >= this.right.visit();
+        } 
+        else if (this.op.type == And){
+            return Boolean(this.left.visit() && this.right.visit());
+        } 
+        else if (this.op.type == Or){
+            return Boolean(this.left.visit() || this.right.visit());
+        }
     }
+
+    tac(instruction_list){
+        const left = this.left.tac(instruction_list);
+        const right = this.right.tac(instruction_list);
+        const temp = instruction_list.getTemp();
+        instruction_list.addInstruction(`${temp} = ${left} ${this.op.value} ${right}`);
+        return temp;
+    }
+
 }
 
 class UnaryOp extends AST{
@@ -428,6 +707,16 @@ class UnaryOp extends AST{
         else if (this.op.type == Minus){
             return -this.expr.visit();
         }
+        else if (this.op.type == Not){
+            return !this.expr.visit();
+        }
+    }
+
+    tac(instruction_list){
+        const expr = this.expr.tac(instruction_list);
+        const temp = instruction_list.getTemp();
+        instruction_list.addInstruction(`${temp} = ${this.op.value} ${expr}`);
+        return temp;
     }
 
 }
@@ -442,6 +731,10 @@ class Num extends AST{
     visit(){
         return Number(this.value);
     }
+
+    tac(instruction_list){
+        return this.visit();
+    }
 }
 
 
@@ -452,11 +745,36 @@ class Var extends AST{
     }
 
     visit(){
-        if (scopetable.get(this.name)){
-            return scopetable.get(this.name);
+        console.log("Name: " + this.name);
+        console.log(symboltable.table);
+        console.log("Depth: "+symboltable.getDepth());
+        if (symboltable.get(this.name) !== undefined){
+            console.log("Found");
+            return symboltable.get(this.name);
         } else {
+            console.log("Not found");
             throw new Error(`Variable ${this.name} is not defined`);
         }
+    }
+
+    tac(instruction_list){
+        //return the name followed by the last position in the instruction list 
+
+
+        //fetch the current level in the scope table
+        let level = symboltable.getDepth();
+
+        //fetch the previous assignment of the variable
+        let previous_assignment = instruction_list.getPreviousAssignment(this.name, level);
+        //if there is a previous assignment, return the name of the variable and the level of the previous assignment
+        if (previous_assignment){
+            return `${this.name}(${previous_assignment.level})`;
+        }
+        //if there is no previous assignment, return the name of the variable and the current level
+        else {
+            return `${this.name}(${level})`;
+        }
+
     }
 }
 
@@ -485,43 +803,105 @@ class Parser {
         }
     }
 
-    peek_token(){
+    peekToken(){
         return this.token_list[this.pos + 1];
     }
 
-    expr_list(){
-        let expr_list = new ExprList();
+    exprList(scoped=true){
+        let expr_list = new ExprList(scoped);
         this.eat(LBrace);
         while(this.current_token.type != EOF && this.current_token.type != RBrace){
             if (this.current_token.type == LBrace){
-                expr_list.expr.push(this.expr_list());
-            } else {
-                expr_list.expr.push(this.expr());
+                expr_list.expr.push(this.exprList());
+            } else if (this.current_token.type == If){
+                expr_list.expr.push(this.ifStatement());
             }
+            else if (this.current_token.type == While){
+                expr_list.expr.push(this.whileStatement());
+            }
+            else {
+                expr_list.expr.push(this.expr());
+            } 
             if (this.current_token.type == Semi){
                 this.eat(Semi);
             }
-            
             else if (this.current_token.type != RBrace) {
                 throw new Error("Found an unterminated statement: semicolon or right braces expected")
             }
         }
         this.eat(RBrace)
-        console.log(expr_list.expr);
         return expr_list;
     }
-    
+
+    ifStatement(){
+        this.eat(If);
+        this.eat(LParen);
+        let condition = this.expr();
+        this.eat(RParen);
+        let then_block = this.exprList(false);
+        let else_block = null;
+        if (this.current_token.type == Else){
+            this.eat(Else);
+            else_block = this.exprList(false);
+        }
+        return new IfStatement(condition, then_block, else_block);
+    }
+
+    whileStatement(){
+        this.eat(While);
+        this.eat(LParen);
+        let condition = this.expr();
+        this.eat(RParen);
+        let block = this.exprList(false);
+        return new WhileStatement(condition, block);
+    }
+ 
 
     expr(){
-        let node = this.plus_minus();
+        let node = this.logical();
 
         while (this.current_token.type == Equal){
             let op = this.current_token;
             this.eat(Equal);
             node = new Assign(node, op, this.expr());
         }
+
         return node;
     }
+
+    logical(){
+        let node = this.comparison();
+
+        while (this.current_token.type == And || this.current_token.type == Or){
+            let op = this.current_token;
+            this.eat(op.type);
+            node = new BinOp(node, op, this.comparison());
+        }
+
+        return node;
+    }
+
+    comparison(){
+        let node = this.equality();
+        while (this.current_token.type == Lt || this.current_token.type == Gt || this.current_token.type == LtEq || this.current_token.type == GtEq){
+            let op = this.current_token;
+            this.eat(op.type);
+            node = new BinOp(node, op, this.equality());
+        }
+        return node;
+    }
+
+    equality(){
+        let node = this.plus_minus();
+
+        while (this.current_token.type == Eq|| this.current_token.type == NotEq){
+            let op = this.current_token;
+            this.eat(op.type);
+            node = new BinOp(node, op, this.plus_minus());
+        }
+        return node;
+    }
+
 
     plus_minus(){
         let node = this.mul_div();
@@ -581,14 +961,14 @@ class Parser {
             return node;
         }
         if (token.type == LBrace){
-            return this.expr_list();
+            return this.exprList();
         }
         if (token.type == ID){
-            let is_function = scopetable.check_if_function(token.value);
+            let is_function = symboltable.isFunction(token.value);
             console.log(is_function);
 
             if (is_function){
-                let args_length = scopetable.get(token.value).args.length;
+                let args_length = symboltable.get(token.value).args.length;
                 this.eat(ID);
                 let real_args = [];
                 let counter = 0;
@@ -630,7 +1010,7 @@ class Parser {
     }
 
     parse(){
-        let node = this.expr_list();
+        let node = this.exprList();
         if (this.current_token.type != EOF){
             throw new Error("Error, no EOF found");
         }
@@ -640,35 +1020,49 @@ class Parser {
 }
 
 class Solver{
-    constructor(tree){
+    constructor(tree, instruction_list){
         this.tree = tree;
+        this.instruction_list = instruction_list
     }
 
     visit(){
         let visit = this.tree.visit();
         return visit;
     }
+
+    tac(){
+        let tac = this.tree.tac(this.instruction_list);
+        return this.instruction_list;
+    }
 }
 
 class Interpreter{
 
     constructor(){
-        scopetable.clear();
+        symboltable.clear();
     }
 
-    input(expression=""){
+    input(expression="", tac=false, lex_only=false){
 
         if (!expression || expression === "" || expression.trim() === ""){
           return "";
         }
 
-
+        let instruction_list = new InstructionList();
         let lexer = new Lexer(expression);
         let parser = new Parser(lexer.tokenize());
+        if (lex_only){
+            return parser.token_list;
+        }
         let tree = parser.parse();
-        let solver = new Solver(tree);
+        console.log("Tree: ", tree)
+        let solver = new Solver(tree, instruction_list);
         let result = solver.visit();
-        scopetable.print()
+        if (tac){
+            let tac = solver.tac();
+            console.log(tac.toString());
+        }
+
         return result;
     }
 }
@@ -676,16 +1070,15 @@ class Interpreter{
 let interpreter = new Interpreter();
 
 console.log(interpreter.input(`
-{ 
-    fn avg a b => (a + b) / 2;
-    x = 1;
-    y = 4;
-    z = avg x y;
-    z;
+{
+    c = 0;
+    c = c + 3;
 }
-`));
+`, true));
 
 
 module.exports = {
     Interpreter: Interpreter
 }
+
+  

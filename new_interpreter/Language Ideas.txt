@@ -1,0 +1,26 @@
+Language ideas: 
+
+* Possibility to evaluate expressions such as (2 > x > -3) in a logical way. 
+Possible issues with evaluating as (2 > x) > -3 normally as it would produce true > -3.
+May be necessary to evaluate expressions such as 2 > x as a pair (true, x) of which the second 
+value can be used in future evaluations 
+
+* Possibility to introduce pair values that can be used in expressions which use different types, 
+for example (true, 5) which can behave as a boolean or an integer depending on the context, without 
+implicit type conversion
+
+* IS operator, which can be used with functions returning a boolean. Ex. If x is even, where 
+the even(x) function returns a boolean. Technically a simple syntax change from If ( even(x) )
+
+* Possibility to use syntax macros directly in the code
+
+* Replace statements like x = double(x) with double x. If possible, extend the compiler to be able 
+to handle statements such as: double x if x is even
+
+* Use a type system with the minimum possible amount of implicit conversions 
+
+* Support arrays, dictionaries as primitive objects 
+
+* First class functions
+
+* Shorthand multiplication 2x instead of 2 * x
