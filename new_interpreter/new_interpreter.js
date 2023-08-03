@@ -30,7 +30,6 @@ let While = Symbol("While");
 const keywords_obj = {
     "if": If,
     "else": Else,
-    //Add while 
     "while": While,
 }
 
@@ -1073,6 +1072,9 @@ console.log(interpreter.input(`
 {
     c = 0;
     c = c + 3;
+    while (c > 0){
+        c = c - 1;
+    };
 }
 `, true));
 
