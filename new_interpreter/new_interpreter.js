@@ -30,7 +30,6 @@ let While = Symbol("While");
 const keywords_obj = {
     "if": If,
     "else": Else,
-    //Add while 
     "while": While,
 }
 
@@ -220,37 +219,12 @@ class Lexer{
         this.current_char = this.input[this.pos];
     }
 
-    analyzeFunction(){
-
-        function eqSet(as, bs) {
-            if (as.size !== bs.size) return false;
-            for (var a of as) if (!bs.has(a)) return false;
-            return true;
-        }
-
-        var regex = /\s*(=>|[-+*\/\%=\(\)]|[A-Za-z_][A-Za-z0-9_]*|[0-9]*\.?[0-9]+)\s*/g;
-        var var_name = /[A-Za-z_][A-Za-z0-9_]*/;
-        let keywords = this.input.split(regex).filter(function (s) { return !s.match(/^\s*$/); }).slice(2);
-        let second = keywords.slice(keywords.indexOf("=>")).filter(function (s) { return s.match(var_name)});
-        let first = keywords.slice(0, keywords.indexOf("=>")).filter(function (s) { return s.match(var_name)});
-        let set_first = new Set(first);
-        if (first.length != set_first.size){
-            throw new Error("Duplicate args in function")
-        }
-        let set_second = new Set(second);
-        console.log("Function log: " , set_first, set_second, eqSet(set_first, set_second));
-        if (!eqSet(set_first, set_second)){
-            throw new Error("Function parameter error");
-        }
-
-    }
-
     error(){
         throw new Error(`Lexer error at position ${this.pos}, token = ${this.current_char}`);
     }
 
-    skipSpaces(){ // FIX
-        while(this.current_char && this.current_char.match(/\s/) || this.current_char && this.current_char === "\n"){
+    skipSpaces(){
+        while(this.current_char?.match(/\s/) || this.current_char && this.current_char === "\n"){
             this.advance();
         }
     } 
@@ -285,14 +259,14 @@ class Lexer{
 
     number(){   
         let result = "", decimal = "";
-        while(this.current_char && this.current_char.match(/[0-9]/)){
+        while(this.current_char?.match(/\d/)){
             result += this.current_char;
             this.advance();
         }
         if (this.current_char == "."){
             decimal = ".";
             this.advance();
-            while(this.current_char && this.current_char.match(/[0-9]/)){
+            while(this.current_char?.match(/\d/)){
                 decimal += this.current_char;
                 this.advance();
             }
@@ -301,7 +275,7 @@ class Lexer{
     }
 
     isSpace(){
-        return this.current_char && this.current_char.match(/\s/);
+        return this.current_char?.match(/\s/);
     }
 
     getNextToken(){
@@ -433,12 +407,6 @@ class Lexer{
             }
         }
         tokens.push(new Token(EOF, null));
-
-        // if (tokens[0].value == "fn"){
-        //     this.analyze_function();
-        // } else if ( this.input.indexOf("fn") != -1){
-        //   throw new Error("Functions cannot be defined in expressions")
-        // }
 
         console.log(tokens)
 
@@ -794,7 +762,6 @@ class Parser {
 
     eat(expected_type){
         if (this.current_token.type == expected_type){
-            //console.log(`Eating token ${this.current_token.value}`);
             this.pos += 1;
             this.current_token = this.token_list[this.pos];
         }
@@ -1031,7 +998,7 @@ class Solver{
     }
 
     tac(){
-        let tac = this.tree.tac(this.instruction_list);
+        this.tree.tac(this.instruction_list);
         return this.instruction_list;
     }
 }
@@ -1073,6 +1040,9 @@ console.log(interpreter.input(`
 {
     c = 0;
     c = c + 3;
+    while (c > 0){
+        c = c - 1;
+    };
 }
 `, true));
 
