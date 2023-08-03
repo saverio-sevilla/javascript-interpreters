@@ -29,40 +29,20 @@ let Eq = Symbol("Eq");
 let If = Symbol("If");
 let Else = Symbol("Else");
 let While = Symbol("While");
-
 let String = Symbol("String");
 let Bool = Symbol("Bool");
 let Quote = Symbol("Quote");
 let Type = Symbol("Type");
 let Comma = Symbol("Comma");
 let Colon = Symbol("Colon");
-
 let Def = Symbol("Def");
 let Do = Symbol("Do");
 let Return = Symbol("Return");
 let Break = Symbol("Break");
 let Continue = Symbol("Continue");
 let For = Symbol("For");
-
-const keywords_obj = {
-    "if": If,
-    "else": Else,
-    "for": For,
-    "def": Def,
-    "do": Do,
-    "return": Return,
-    "break": Break,
-    "continue": Continue,
-    "while": While,
-    "true": Bool,
-    "false": Bool,
-    "int": Type,
-    "float": Type,
-    "string": Type,
-    "bool": Type,
-}
-
-const keywords = new Map(Object.entries(keywords_obj));
+let Const = Symbol("Const");
+let AndSign = Symbol("AndSign");
 
 
 class Token{
@@ -97,13 +77,14 @@ class Lexer{
             "and": And,
             "or": Or,
             "not": Not,
+            "fn": Fn,
         }
         
         this.keywords = new Map(Object.entries(this.keywords_obj));
     }
 
-    error(){
-        throw new Error(`Lexer error at position: ${this.pos}, token: ${this.current_char}`);
+    error(message){
+        throw new Error(`Lexer error at position: ${this.pos}, token: ${this.current_char} ${message}`);
     }
 
     skipSpaces(){
@@ -159,7 +140,7 @@ class Lexer{
             decimal = ".";
             this.advance();
             if (!this.current_char?.match(/\d/)){
-                this.error();
+                this.error("Invalid number");
             }
             while(this.current_char?.match(/\d/)){
                 decimal += this.current_char;
@@ -194,11 +175,6 @@ class Lexer{
             if (this.current_char.match(/\d/)){
                 return this.number();
             }
-            if (this.current_char == "f" && this.peek() == "n"){
-                this.advance();
-                this.advance();
-                return new Token(Fn, "fn");
-            }
             if (this.current_char == "=" && this.peek() == "="){
                 this.advance();
                 this.advance();
@@ -229,7 +205,11 @@ class Lexer{
                 this.advance();
                 return new Token(Or, "||");
             }
-
+            if (this.current_char == "=" && this.peek() == ">"){
+                this.advance();
+                this.advance();
+                return new Token(Arrow, "=>");
+            }
             if (this.current_char.match(/[a-zA-Z_]/)){
                 let result = this.identifier();
                 if (this.keywords.has(result)){
@@ -265,11 +245,6 @@ class Lexer{
             if (this.current_char == "%"){
                 this.advance();
                 return new Token(Mod, "%");
-            }
-            if (this.current_char == "=" && this.peek() == ">"){
-                this.advance();
-                this.advance();
-                return new Token(Arrow, "=>");
             }
             if (this.current_char == "="){
                 this.advance();
@@ -315,6 +290,10 @@ class Lexer{
                 this.advance();
                 return new Token(Colon, ":");
             }
+            if (this.current_char == "&"){
+                this.advance();
+                return new Token(AndSign, "&");
+            }
             if (this.current_char == "\""){
                 this.advance();
                 let result = this.string();
@@ -322,7 +301,7 @@ class Lexer{
                 return new Token(String, result);
             }
             else {
-                this.error();
+                this.error("Invalid character");
             }
         }
     }
@@ -345,10 +324,7 @@ class Lexer{
 
 
 let input = `
-{
-    int a = 3.88;
-    bool b8 = true;
-}
+fn(int x, int y) => int {}
 `;
 
 let lexer = new Lexer(input);
